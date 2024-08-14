@@ -1,3 +1,10 @@
 {
-  "cSpell.words": ["cloudinary", "datauri", "Unfollow", "unfollowed"]
+  "cSpell.words": [
+    "addpost",
+    "cloudinary",
+    "datauri",
+    "Unfollow",
+    "unfollowed",
+    "userpost"
+  ]
 }

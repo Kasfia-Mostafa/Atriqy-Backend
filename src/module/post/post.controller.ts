@@ -10,7 +10,7 @@ import { Types } from "mongoose";
 import { Comment } from "../comment/comment.model";
 
 //*** New post
-export const addNewPost = async (req: Request, res: Response) => {
+const addNewPost = async (req: Request, res: Response) => {
   try {
     const { caption } = req.body;
     const image = req.file;
@@ -92,10 +92,7 @@ export const addNewPost = async (req: Request, res: Response) => {
 };
 
 //*** Get all post
-export const getAllPost = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
+const getAllPost = async (req: Request, res: Response): Promise<Response> => {
   try {
     // Fetch posts and populate author
     const posts: TPost[] = await Post.find().sort({ createdAt: -1 }).populate({
@@ -131,10 +128,7 @@ export const getAllPost = async (
 };
 
 //*** Get user's post
-export const getUserPost = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
+const getUserPost = async (req: Request, res: Response): Promise<Response> => {
   try {
     // Extract the authorId from the request parameters
     const authorId = req.params.id;
@@ -169,10 +163,7 @@ export const getUserPost = async (
 };
 
 //*** Like post
-export const likePost = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
+const likePost = async (req: Request, res: Response): Promise<Response> => {
   try {
     // Extract user ID from the request object
     const userId = req.user?.id;
@@ -229,10 +220,7 @@ export const likePost = async (
 };
 
 //*** Dislike post
-export const dislikePost = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
+const dislikePost = async (req: Request, res: Response): Promise<Response> => {
   try {
     // Extract the user ID from the request object
     const userId = req.user?.id;
@@ -284,10 +272,7 @@ export const dislikePost = async (
 };
 
 //*** Add comment
-export const addComment = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
+const addComment = async (req: Request, res: Response): Promise<Response> => {
   try {
     const postId = req.params.id;
     const userId = req.user?.id;
@@ -342,7 +327,7 @@ export const addComment = async (
 };
 
 //*** Get comments of post
-export const getCommentsOfPost = async (
+const getCommentsOfPost = async (
   req: Request,
   res: Response
 ): Promise<Response | void> => {
@@ -373,7 +358,7 @@ export const getCommentsOfPost = async (
 };
 
 //*** Delete post
-export const deletePost = async (
+const deletePost = async (
   req: Request,
   res: Response
 ): Promise<Response | void> => {
@@ -421,7 +406,7 @@ export const deletePost = async (
 };
 
 //*** Bookmark post
-export const bookmarkPost = async (
+const bookmarkPost = async (
   req: Request,
   res: Response
 ): Promise<Response | void> => {
@@ -474,4 +459,16 @@ export const bookmarkPost = async (
       .status(500)
       .json({ message: "An error occurred", success: false });
   }
+};
+
+export const PostController = {
+  addNewPost,
+  getAllPost,
+  getUserPost,
+  likePost,
+  dislikePost,
+  addComment,
+  getCommentsOfPost,
+  deletePost,
+  bookmarkPost,
 };

@@ -8,7 +8,7 @@ const ConversationSchema = new Schema<TConversation>({
       ref: "User",
     },
   ],
-  message: [
+  messages: [
     {
       type: Schema.Types.ObjectId,
       ref: "Message",
