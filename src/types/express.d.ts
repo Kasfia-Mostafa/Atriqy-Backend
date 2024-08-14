@@ -34,3 +34,10 @@ interface CustomJwtPayload extends JwtPayload {
   userId: string;
 }
 
+
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: JwtPayload | { id: string };
+  }
+}
+

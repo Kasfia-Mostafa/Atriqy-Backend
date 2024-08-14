@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import { TUser } from "../users/users.interface";
 import { Post } from "./post.model";
 import { Types } from "mongoose";
+import { Comment } from "../comment/comment.model";
 
 //*** New post
 export const addNewPost = async (req: Request, res: Response) => {
@@ -91,258 +92,386 @@ export const addNewPost = async (req: Request, res: Response) => {
 };
 
 //*** Get all post
-export const getAllPost = async (req: Request, res: Response): Promise<Response> => {
+export const getAllPost = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
   try {
     // Fetch posts and populate author
-    const posts: TPost[] = await Post.find()
-      .sort({ createdAt: -1 })
-      .populate({
-        path: 'author',
-        select: 'username profilePicture'
-      });
+    const posts: TPost[] = await Post.find().sort({ createdAt: -1 }).populate({
+      path: "author",
+      select: "username profilePicture",
+    });
 
     // Populate comments separately
-    const populatedPosts = await Promise.all(posts.map(async (post) => {
-      const populatedPost = await Post.findById(post._id)
-        .populate({
-          path: 'comments',
+    const populatedPosts = await Promise.all(
+      posts.map(async (post) => {
+        const populatedPost = await Post.findById(post._id).populate({
+          path: "comments",
           populate: {
-            path: 'author',
-            select: 'username profilePicture'
-          }
+            path: "author",
+            select: "username profilePicture",
+          },
         });
-      return populatedPost;
-    }));
+        return populatedPost;
+      })
+    );
 
     return res.status(200).json({
       posts: populatedPosts,
-      success: true
+      success: true,
     });
   } catch (error) {
     console.error(error);
     return res.status(500).json({
       success: false,
-      message: 'An error occurred while fetching posts'
+      message: "An error occurred while fetching posts",
     });
   }
 };
 
-
-export const getUserPost = async (req, res) => {
+//*** Get user's post
+export const getUserPost = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
   try {
-    const authorId = req.id;
-    const posts = await Post.find({ author: authorId })
+    // Extract the authorId from the request parameters
+    const authorId = req.params.id;
+
+    // Fetch posts for the specific author
+    const posts: TPost[] = await Post.find({ author: authorId })
       .sort({ createdAt: -1 })
       .populate({
         path: "author",
-        select: "username, profilePicture",
+        select: "username profilePicture",
       })
       .populate({
         path: "comments",
-        sort: { createdAt: -1 },
+        options: { sort: { createdAt: -1 } },
         populate: {
           path: "author",
-          select: "username, profilePicture",
+          select: "username profilePicture",
         },
       });
+
     return res.status(200).json({
       posts,
       success: true,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while fetching posts",
+    });
   }
 };
-export const likePost = async (req, res) => {
+
+//*** Like post
+export const likePost = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
   try {
-    const likeKrneWalaUserKiId = req.id;
+    // Extract user ID from the request object
+    const userId = req.user?.id;
     const postId = req.params.id;
+
+    // Check if the user is authenticated
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "User not authenticated", success: false });
+    }
+    // Find the post by its ID
     const post = await Post.findById(postId);
-    if (!post)
+    if (!post) {
       return res
         .status(404)
         .json({ message: "Post not found", success: false });
-
-    // like logic started
-    await post.updateOne({ $addToSet: { likes: likeKrneWalaUserKiId } });
+    }
+    // Add the user ID to the likes array (if not already present)
+    if (!post.likes.includes(userId)) {
+      post.likes.push(userId);
+    }
     await post.save();
 
-    // implement socket io for real time notification
-    const user = await User.findById(likeKrneWalaUserKiId).select(
+    // Fetch user details for the notification
+    const user = await UserProfile.findById(userId).select(
       "username profilePicture"
     );
-
-    const postOwnerId = post.author.toString();
-    if (postOwnerId !== likeKrneWalaUserKiId) {
-      // emit a notification event
-      const notification = {
-        type: "like",
-        userId: likeKrneWalaUserKiId,
-        userDetails: user,
-        postId,
-        message: "Your post was liked",
-      };
-      const postOwnerSocketId = getReceiverSocketId(postOwnerId);
-      io.to(postOwnerSocketId).emit("notification", notification);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ message: "User not found", success: false });
     }
-
+    // Send a notification if the user who liked the post is not the author
+    // const postOwnerId = post.author.toString();
+    // if (postOwnerId !== userId) {
+    //   const notification = {
+    //     type: "like",
+    //     userId,
+    //     userDetails: user,
+    //     postId,
+    //     message: "Your post was liked",
+    //   };
+    //   const postOwnerSocketId = getReceiverSocketId(postOwnerId);
+    //   io.to(postOwnerSocketId).emit("notification", notification);
+    // }
     return res.status(200).json({ message: "Post liked", success: true });
-  } catch (error) {}
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "An error occurred", success: false });
+  }
 };
-export const dislikePost = async (req, res) => {
+
+//*** Dislike post
+export const dislikePost = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
   try {
-    const likeKrneWalaUserKiId = req.id;
+    // Extract the user ID from the request object
+    const userId = req.user?.id;
     const postId = req.params.id;
+
+    // Check if the post exists
     const post = await Post.findById(postId);
-    if (!post)
+    if (!post) {
       return res
         .status(404)
         .json({ message: "Post not found", success: false });
+    }
 
-    // like logic started
-    await post.updateOne({ $pull: { likes: likeKrneWalaUserKiId } });
+    // Remove the user ID from the likes array
+    await post.updateOne({ $pull: { likes: userId } });
     await post.save();
 
-    // implement socket io for real time notification
-    const user = await User.findById(likeKrneWalaUserKiId).select(
+    // Fetch user details for the notification
+    const user = await UserProfile.findById(userId).select(
       "username profilePicture"
     );
-    const postOwnerId = post.author.toString();
-    if (postOwnerId !== likeKrneWalaUserKiId) {
-      // emit a notification event
-      const notification = {
-        type: "dislike",
-        userId: likeKrneWalaUserKiId,
-        userDetails: user,
-        postId,
-        message: "Your post was liked",
-      };
-      const postOwnerSocketId = getReceiverSocketId(postOwnerId);
-      io.to(postOwnerSocketId).emit("notification", notification);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ message: "User not found", success: false });
     }
+
+    // Send a notification if the user who disliked the post is not the author
+    // const postOwnerId = post.author.toString();
+    // if (postOwnerId !== userId) {
+    //   const notification = {
+    //     type: "dislike",
+    //     userId,
+    //     userDetails: user,
+    //     postId,
+    //     message: "Your post was disliked",
+    //   };
+    //   const postOwnerSocketId = getReceiverSocketId(postOwnerId);
+    //   io.to(postOwnerSocketId).emit("notification", notification);
+    // }
 
     return res.status(200).json({ message: "Post disliked", success: true });
-  } catch (error) {}
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "An error occurred", success: false });
+  }
 };
-export const addComment = async (req, res) => {
+
+//*** Add comment
+export const addComment = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
   try {
     const postId = req.params.id;
-    const commentKrneWalaUserKiId = req.id;
+    const userId = req.user?.id;
 
     const { text } = req.body;
 
-    const post = await Post.findById(postId);
-
-    if (!text)
+    // Validate that text is provided
+    if (!text) {
       return res
         .status(400)
-        .json({ message: "text is required", success: false });
+        .json({ message: "Text is required", success: false });
+    }
 
+    // Find the post by ID
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res
+        .status(404)
+        .json({ message: "Post not found", success: false });
+    }
+
+    // Create the comment
     const comment = await Comment.create({
       text,
-      author: commentKrneWalaUserKiId,
+      author: userId,
       post: postId,
     });
 
+    // Populate the comment with author details
     await comment.populate({
       path: "author",
       select: "username profilePicture",
     });
 
+    // Add the comment to the post's comments array
     post.comments.push(comment._id);
     await post.save();
 
+    // Return a success response
     return res.status(201).json({
       message: "Comment Added",
       comment,
       success: true,
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    return res.status(500).json({
+      message: "An error occurred",
+      success: false,
+    });
   }
 };
-export const getCommentsOfPost = async (req, res) => {
+
+//*** Get comments of post
+export const getCommentsOfPost = async (
+  req: Request,
+  res: Response
+): Promise<Response | void> => {
   try {
     const postId = req.params.id;
 
+    // Fetch comments associated with the given postId and populate author details
     const comments = await Comment.find({ post: postId }).populate(
       "author",
       "username profilePicture"
     );
 
-    if (!comments)
+    // If no comments are found, return a 404 response
+    if (!comments || comments.length === 0) {
       return res
         .status(404)
         .json({ message: "No comments found for this post", success: false });
+    }
 
+    // Return the comments in the response with a success message
     return res.status(200).json({ success: true, comments });
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "An error occurred", success: false });
   }
 };
-export const deletePost = async (req, res) => {
+
+//*** Delete post
+export const deletePost = async (
+  req: Request,
+  res: Response
+): Promise<Response | void> => {
   try {
     const postId = req.params.id;
-    const authorId = req.id;
+    const authorId = req.user?.id; // Assumes you've extended the Request interface
 
+    // Find the post by ID
     const post = await Post.findById(postId);
-    if (!post)
+    if (!post) {
       return res
         .status(404)
         .json({ message: "Post not found", success: false });
+    }
 
-    // check if the logged-in user is the owner of the post
-    if (post.author.toString() !== authorId)
-      return res.status(403).json({ message: "Unauthorized" });
+    // Check if the logged-in user is the owner of the post
+    if (post.author.toString() !== authorId) {
+      return res.status(403).json({ message: "Unauthorized", success: false });
+    }
 
-    // delete post
+    // Delete the post
     await Post.findByIdAndDelete(postId);
 
-    // remove the post id from the user's post
-    let user = await User.findById(authorId);
-    user.posts = user.posts.filter((id) => id.toString() !== postId);
-    await user.save();
+    // Remove the post ID from the user's list of posts
+    const user = await UserProfile.findById(authorId);
+    if (user) {
+      user.posts = user.posts.filter((id) => id.toString() !== postId);
+      await user.save();
+    }
 
-    // delete associated comments
+    // Delete associated comments
     await Comment.deleteMany({ post: postId });
 
+    // Return a success response
     return res.status(200).json({
       success: true,
       message: "Post deleted",
     });
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "An error occurred", success: false });
   }
 };
-export const bookmarkPost = async (req, res) => {
+
+//*** Bookmark post
+export const bookmarkPost = async (
+  req: Request,
+  res: Response
+): Promise<Response | void> => {
   try {
     const postId = req.params.id;
-    const authorId = req.id;
+    const userId = req.user?.id; // Assumes you've extended the Request interface
+
+    // Find the post by ID
     const post = await Post.findById(postId);
-    if (!post)
+    if (!post) {
       return res
         .status(404)
         .json({ message: "Post not found", success: false });
+    }
 
-    const user = await User.findById(authorId);
-    if (user.bookmarks.includes(post._id)) {
-      // already bookmarked -> remove from the bookmark
-      await user.updateOne({ $pull: { bookmarks: post._id } });
+    // Ensure the _id is treated as ObjectId
+    const postObjectId = post._id as mongoose.Types.ObjectId;
+
+    // Find the user by ID
+    const user = await UserProfile.findById(userId);
+    if (!user) {
+      return res
+        .status(404)
+        .json({ message: "User not found", success: false });
+    }
+
+    // Check if the post is already bookmarked
+    if (user.bookmarks.includes(postObjectId)) {
+      // Remove from bookmarks if already bookmarked
+      await user.updateOne({ $pull: { bookmarks: postObjectId } });
       await user.save();
       return res.status(200).json({
         type: "unsaved",
-        message: "Post removed from bookmark",
+        message: "Post removed from bookmarks",
         success: true,
       });
     } else {
-      // bookmark krna pdega
-      await user.updateOne({ $addToSet: { bookmarks: post._id } });
+      // Add to bookmarks if not already bookmarked
+      await user.updateOne({ $addToSet: { bookmarks: postObjectId } });
       await user.save();
-      return res
-        .status(200)
-        .json({ type: "saved", message: "Post bookmarked", success: true });
+      return res.status(200).json({
+        type: "saved",
+        message: "Post bookmarked",
+        success: true,
+      });
     }
   } catch (error) {
-    console.log(error);
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: "An error occurred", success: false });
   }
 };
