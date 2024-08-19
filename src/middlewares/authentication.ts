@@ -1,10 +1,10 @@
-import { NextFunction, Request, Response } from "express";
+import { NextFunction, Response } from "express";
 import jwt from "jsonwebtoken";
 import config from "../app/config";
-import { CustomJwtPayload } from "../types/express";
+import { CustomJwtPayload, AuthenticatedRequest } from "../types/express";
 
 const authentication = async (
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
@@ -26,11 +26,11 @@ const authentication = async (
       });
     }
 
-    req.userId = decode.userId;
+    req.userId = decode.userId; // Attach userId to the request
     console.log("Authenticated User ID:", req.userId); // Debugging line
     next();
   } catch (error) {
-    console.log(error);
+    console.error("Authentication error:", error);
     res.status(500).json({
       message: "Internal Server Error",
       success: false,

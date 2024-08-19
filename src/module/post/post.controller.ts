@@ -8,6 +8,7 @@ import { TUser } from "../users/users.interface";
 import { Post } from "./post.model";
 import { Types } from "mongoose";
 import { Comment } from "../comment/comment.model";
+import { AuthenticatedRequest } from "../../types/express";
 
 //*** New post
 const addNewPost = async (req: Request, res: Response) => {
@@ -15,11 +16,6 @@ const addNewPost = async (req: Request, res: Response) => {
     const { caption } = req.body;
     const image = req.file;
     const authorId = req.userId as string;
-
-    // Debugging line
-    // console.log("Request Body:", req.body);
-    // console.log("Uploaded Image:", image);
-    // console.log("Author ID:", authorId);
 
     // Validate input
     if (!caption) {
@@ -91,7 +87,9 @@ const addNewPost = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error:", error);
-    return res.status(500).json({ message: "An error occurred while adding the post" });
+    return res
+      .status(500)
+      .json({ message: "An error occurred while adding the post" });
   }
 };
 
@@ -363,12 +361,15 @@ const getCommentsOfPost = async (
 
 //*** Delete post
 const deletePost = async (
-  req: Request,
+  req: AuthenticatedRequest,
   res: Response
 ): Promise<Response | void> => {
   try {
     const postId = req.params.id;
-    const authorId = req.user?.id; // Assumes you've extended the Request interface
+    const authorId = req.userId; // Correctly reference userId
+
+    console.log("Attempting to delete post with ID:", postId);
+    console.log("Logged-in Author ID:", authorId);
 
     // Find the post by ID
     const post = await Post.findById(postId);
@@ -378,12 +379,17 @@ const deletePost = async (
         .json({ message: "Post not found", success: false });
     }
 
+    console.log("Post Author ID:", post.author.toString());
+
     // Check if the logged-in user is the owner of the post
     if (post.author.toString() !== authorId) {
+      console.log(
+        "Unauthorized Access Attempt: User is not the owner of the post"
+      );
       return res.status(403).json({ message: "Unauthorized", success: false });
     }
 
-    // Delete the post
+    // Proceed with deleting the post
     await Post.findByIdAndDelete(postId);
 
     // Remove the post ID from the user's list of posts
@@ -391,10 +397,12 @@ const deletePost = async (
     if (user) {
       user.posts = user.posts.filter((id) => id.toString() !== postId);
       await user.save();
+      console.log("Post ID removed from user's posts list.");
     }
 
     // Delete associated comments
     await Comment.deleteMany({ post: postId });
+    console.log("Comments associated with the post deleted.");
 
     // Return a success response
     return res.status(200).json({
@@ -402,12 +410,14 @@ const deletePost = async (
       message: "Post deleted",
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error deleting post:", error);
     return res
       .status(500)
       .json({ message: "An error occurred", success: false });
   }
 };
+
+export default deletePost;
 
 //*** Bookmark post
 const bookmarkPost = async (

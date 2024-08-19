@@ -30,14 +30,21 @@ declare module "express-serve-static-core" {
   }
 }
 
-interface CustomJwtPayload extends JwtPayload {
-  userId: string;
-}
-
-
 declare module 'express-serve-static-core' {
   interface Request {
     user?: JwtPayload | { id: string };
   }
 }
+
+
+export interface CustomJwtPayload {
+  userId: string;
+  // Include other properties if necessary
+}
+
+// Extend the Request interface
+export interface AuthenticatedRequest extends Request {
+  userId?: string; // This will be populated by the authentication middleware
+}
+
 
