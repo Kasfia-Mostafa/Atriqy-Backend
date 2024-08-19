@@ -14,20 +14,27 @@ const addNewPost = async (req: Request, res: Response) => {
   try {
     const { caption } = req.body;
     const image = req.file;
-    const authorId = req.id as string; // Assume req.id is a string
+    const authorId = req.userId as string;
+
+    // Debugging line
+    // console.log("Request Body:", req.body);
+    // console.log("Uploaded Image:", image);
+    // console.log("Author ID:", authorId);
 
     // Validate input
-    if (!caption || !authorId) {
-      return res
-        .status(400)
-        .json({ message: "Caption and author ID are required" });
+    if (!caption) {
+      return res.status(400).json({ message: "Caption is required" });
+    }
+
+    if (!authorId) {
+      return res.status(400).json({ message: "Author ID is required" });
     }
 
     if (!image) {
       return res.status(400).json({ message: "Image is required" });
     }
 
-    // Validate and convert authorId to ObjectId
+    // Validate authorId
     if (!mongoose.Types.ObjectId.isValid(authorId)) {
       return res.status(400).json({ message: "Invalid author ID" });
     }
@@ -46,6 +53,7 @@ const addNewPost = async (req: Request, res: Response) => {
         { resource_type: "image" },
         (error, result) => {
           if (error) {
+            console.error("Cloudinary upload error:", error);
             reject(error);
           } else {
             resolve(result);
@@ -56,27 +64,25 @@ const addNewPost = async (req: Request, res: Response) => {
     });
 
     // Create new post
-    const post = (await Post.create({
+    const post = await Post.create({
       caption,
       image: cloudResponse.secure_url,
       author: authorObjectId,
-    })) as TPost;
+    });
 
     // Update user's posts
-    const user = (await UserProfile.findById(
-      authorObjectId
-    ).exec()) as TUser | null;
-    if (user) {
-      user.posts.push(post._id as Types.ObjectId);
-      await user.save();
-    } else {
+    const user = await UserProfile.findById(authorObjectId).exec();
+    if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
+    user.posts.push(post._id as mongoose.Types.ObjectId);
+    await user.save();
+
     // Fetch and populate the post
-    const populatedPost = (await Post.findById(post._id)
+    const populatedPost = await Post.findById(post._id)
       .populate({ path: "author", select: "-password" })
-      .exec()) as TPost;
+      .exec();
 
     return res.status(201).json({
       message: "New post added",
@@ -84,10 +90,8 @@ const addNewPost = async (req: Request, res: Response) => {
       success: true,
     });
   } catch (error) {
-    console.error(error);
-    return res
-      .status(500)
-      .json({ message: "An error occurred while adding the post" });
+    console.error("Error:", error);
+    return res.status(500).json({ message: "An error occurred while adding the post" });
   }
 };
 

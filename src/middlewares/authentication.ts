@@ -27,6 +27,7 @@ const authentication = async (
     }
 
     req.userId = decode.userId;
+    console.log("Authenticated User ID:", req.userId); // Debugging line
     next();
   } catch (error) {
     console.log(error);

@@ -5,7 +5,7 @@ const addNewPostSchema = z.object({
   body: z.object({
     caption: z.string().min(1, "Caption is required"),
   }),
-  file: z.instanceof(Buffer).or(z.null()).optional(), // For image file
+  // file: z.instanceof(Buffer).or(z.null()).optional(), 
 });
 
 // Schema for adding a comment
