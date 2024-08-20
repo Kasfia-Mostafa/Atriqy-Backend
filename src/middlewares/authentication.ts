@@ -17,22 +17,32 @@ const authentication = async (
       });
     }
 
-    const decode = jwt.verify(token, config.jwt_access_secret) as CustomJwtPayload;
+    const decoded = jwt.verify(token, config.jwt_access_secret) as CustomJwtPayload;
 
-    if (!decode || !decode.userId) {
+    if (!decoded || !decoded.userId) {
       return res.status(401).json({
         message: "Invalid token",
         success: false,
       });
     }
 
-    req.userId = decode.userId; // Attach userId to the request
-    console.log("Authenticated User ID:", req.userId); // Debugging line
+    req.userId = decoded.userId; // Set the user ID in req.userId
     next();
   } catch (error) {
     console.error("Authentication error:", error);
-    res.status(500).json({
-      message: "Internal Server Error",
+    let responseMessage = "Internal Server Error";
+    let statusCode = 500;
+
+    if (error instanceof jwt.TokenExpiredError) {
+      responseMessage = "Token has expired";
+      statusCode = 401;
+    } else if (error instanceof jwt.JsonWebTokenError) {
+      responseMessage = "Invalid token";
+      statusCode = 401;
+    }
+
+    return res.status(statusCode).json({
+      message: responseMessage,
       success: false,
     });
   }

@@ -2,8 +2,9 @@ import cors from "cors";
 import express, { Application, Request, Response, urlencoded } from "express";
 import cookieParser from "cookie-parser";
 import router from "./router";
+import { app,server } from "./module/socket/socket";
 
-const app: Application = express();
+// const app: Application = express();
 
 const corsOption = {
   origin: "http://localhost:5173",

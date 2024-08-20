@@ -22,7 +22,7 @@ router.post(
 router.get("/logout", UserControllers.logout);
 
 router.get(
-  "/profile/:id",
+  "/:id/profile",
   authentication,
   UserControllers.getProfile
 );
@@ -30,7 +30,7 @@ router.get(
 router.post(
   "/profile/edit",
   authentication,
-  upload.single('profilePicture'),
+  upload.single('profilePhoto'),
   validateRequest(UserValidation.editProfileSchema),
   UserControllers.editProfile
 );

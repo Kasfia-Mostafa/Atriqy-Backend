@@ -8,12 +8,16 @@ const UserProfileSchema: Schema<TUser> = new Schema<TUser>(
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     profilePicture: { type: String },
-    bio: { type: String },
-    gender: { type: String, enum: ["male", "female", "other"] },
+    bio: { type: String, default: "This user has not set a bio yet" },
+    gender: {
+      type: String,
+      enum: ["male", "female", "other"],
+      default: "Select gender",
+    },
     followers: [{ type: Schema.Types.ObjectId, ref: "UserProfile" }],
     following: [{ type: Schema.Types.ObjectId, ref: "UserProfile" }],
     posts: [{ type: Schema.Types.ObjectId, ref: "Post" }],
-    bookmarks: [{ type: Schema.Types.ObjectId, ref: "Post" }],
+    bookmarks: [{ type: Schema.Types.ObjectId, ref: "Post" }],    
   },
   { timestamps: true }
 );

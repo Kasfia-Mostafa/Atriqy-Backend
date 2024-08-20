@@ -95,7 +95,7 @@ const login = async (req: Request, res: Response) => {
       username: user.username,
       email: user.email,
       profilePicture: user.profilePicture,
-      bio: user.bio, 
+      bio: user.bio,
       gender: user.gender,
       followers: user.followers.map((follower) => follower.toString()),
       following: user.following.map((following) => following.toString()),
@@ -151,12 +151,37 @@ const getProfile = async (req: Request, res: Response) => {
     // Extract the user ID from the request parameters
     const userId = req.params.id;
 
-    // Fetch the user profile from the database, including populated bookmarks
-    const user = await UserProfile.findById(userId).select("-password")
-      .populate({
-        path: 'bookmarks',
-        select: 'title content', // Select only the fields you need
-      })
+    // Validate the user ID format
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        message: "Invalid user ID format.",
+        success: false,
+      });
+    }
+
+    // Fetch the user profile from the database, including populated bookmarks and posts
+    const user = await UserProfile.findById(userId)
+      .select("-password") // Exclude the password field
+      .populate([
+        {
+          path: "bookmarks",
+          select: "title content", // Include title and content of bookmarks
+        },
+        {
+          path: "posts",
+          select: "title content image createdAt likes comments", // Include likes and comments in posts
+          populate: [
+            {
+              path: "likes",
+              select: "username profilePicture", // Include user info for likes
+            },
+            {
+              path: "comments.userId", // Populate user info in comments
+              select: "username profilePicture",
+            },
+          ],
+        },
+      ])
       .exec();
 
     // If the user profile is not found, return a 404 response
@@ -167,17 +192,11 @@ const getProfile = async (req: Request, res: Response) => {
       });
     }
 
-    // Fetch posts related to the user, sort by creation date in descending order
-    const posts = await Post.find({ _id: { $in: user.posts } })
-      .sort({ createdAt: -1 })
-      .select('title content createdAt') // Select only the fields you need
-      .exec();
-
-    // Return the user profile and associated posts in the response
+    // Return the user profile with populated bookmarks and posts, including the bio
     return res.status(200).json({
       user: {
         ...user.toObject(), // Convert the user document to a plain JavaScript object
-        posts, // Attach posts to the user profile
+        bio: user.bio,
       },
       success: true,
     });
@@ -192,7 +211,7 @@ const getProfile = async (req: Request, res: Response) => {
 };
 
 //*** Define the edit profile function
-const editProfile = async (req:Request, res:Response) => {
+const editProfile = async (req: Request, res: Response) => {
   try {
     const userId = req.userId;
     const { bio, gender } = req.body;
@@ -265,7 +284,6 @@ const getSuggestedUsers = async (req: Request, res: Response) => {
   }
 };
 
-
 //*** Define the followOrUnfollow function
 const followOrUnfollow = async (req: Request, res: Response) => {
   try {
@@ -298,7 +316,9 @@ const followOrUnfollow = async (req: Request, res: Response) => {
     }
 
     // Check if the current user is following the target user
-    const isFollowing = currentUser.following.some(id => id.equals(targetUserObjectId));
+    const isFollowing = currentUser.following.some((id) =>
+      id.equals(targetUserObjectId)
+    );
 
     if (isFollowing) {
       // Unfollow logic
@@ -349,5 +369,5 @@ export const UserControllers = {
   getProfile,
   editProfile,
   getSuggestedUsers,
-  followOrUnfollow
+  followOrUnfollow,
 };
