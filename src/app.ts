@@ -1,29 +1,29 @@
-import cors from "cors";
-import express, { Application, Request, Response, urlencoded } from "express";
+import express, { Request, Response, urlencoded } from "express";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import router from "./router";
-import { app,server } from "./module/socket/socket";
 
-// const app: Application = express();
+// Initialize Express
+const app = express();
 
+// CORS configuration
 const corsOption = {
   origin: "http://localhost:5173",
   credentials: true,
+  optionSuccessStatus: 200,
 };
 
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
-app.use(urlencoded({ extended: true }));
 app.use(cors(corsOption));
+app.use(urlencoded({ extended: true }));
 
 // Routes
 app.use("/api", router);
 
-const test = (req: Request, res: Response) => {
+app.get("/", (req: Request, res: Response) => {
   res.send("Response is 10");
-};
-
-app.get("/", test);
+});
 
 export default app;

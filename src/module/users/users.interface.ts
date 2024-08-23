@@ -7,7 +7,6 @@ export interface TUserProfile {
   password: string;
   profilePicture?: string;
   bio?: string;
-  gender?: 'male' | 'female' | 'other';
   followers: Types.ObjectId[];
   following: Types.ObjectId[];
   posts: Types.ObjectId[];

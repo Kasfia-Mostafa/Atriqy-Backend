@@ -1,3 +1,4 @@
+// middleware/authentication.ts
 import { NextFunction, Response } from "express";
 import jwt from "jsonwebtoken";
 import config from "../app/config";
@@ -9,7 +10,8 @@ const authentication = async (
   next: NextFunction
 ) => {
   try {
-    const token = req.cookies.token;
+    const token = req.cookies.token; 
+
     if (!token) {
       return res.status(401).json({
         message: "User not authenticated",
@@ -17,8 +19,10 @@ const authentication = async (
       });
     }
 
+    // Verify and decode the JWT
     const decoded = jwt.verify(token, config.jwt_access_secret) as CustomJwtPayload;
 
+    // Check if the token contains the required userId
     if (!decoded || !decoded.userId) {
       return res.status(401).json({
         message: "Invalid token",
@@ -26,7 +30,8 @@ const authentication = async (
       });
     }
 
-    req.userId = decoded.userId; // Set the user ID in req.userId
+    // Attach the user ID to req.user for later use
+    req.user = { id: decoded.userId };
     next();
   } catch (error) {
     console.error("Authentication error:", error);

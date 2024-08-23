@@ -8,6 +8,7 @@ const registerSchema = z.object({
   }),
 });
 
+// Login and edit profile schemas remain unchanged
 const loginSchema = z.object({
   body: z.object({
     email: z.string().email("Invalid email address"),
@@ -17,12 +18,11 @@ const loginSchema = z.object({
 
 const editProfileSchema = z.object({
   body: z.object({
+    username: z.string().min(1).optional(),
     bio: z.string().optional(),
-    gender: z.string().optional(),
   }),
   file: z.any().optional(),
 });
-
 
 export const UserValidation = {
   registerSchema,

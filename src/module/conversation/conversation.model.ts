@@ -5,18 +5,15 @@ const ConversationSchema = new Schema<TConversation>({
   participants: [
     {
       type: Schema.Types.ObjectId,
-      ref: "User",
+      ref: "UserProfile", 
     },
   ],
   messages: [
     {
       type: Schema.Types.ObjectId,
-      ref: "Message",
+      ref: "Message", 
     },
   ],
 });
 
-export const Conversation = model<TConversation>(
-  "Conversation",
-  ConversationSchema
-);
+export const Conversation = model<TConversation>("Conversation", ConversationSchema);
