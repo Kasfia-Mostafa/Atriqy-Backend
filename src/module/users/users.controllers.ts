@@ -10,10 +10,10 @@ import cloudinary from "../../utils/cloudinary";
 //*** Register user
 const register = async (req: Request, res: Response) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, source } = req.body;
 
-    // Validation
-    if (!username || !email || !password) {
+    // Validation: Require username and email; only require password if not from Google
+    if (!username || !email || (source !== "google" && !password)) {
       return res.status(400).json({
         message: "Please provide username, email, and password.",
         success: false,
@@ -29,9 +29,18 @@ const register = async (req: Request, res: Response) => {
       });
     }
 
-    // Hash password and create user
-    const hashedPassword = await bcrypt.hash(password, 10);
-    await UserProfile.create({ username, email, password: hashedPassword });
+    // Hash password only if provided
+    let hashedPassword: string | undefined;
+    if (password) {
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+
+    // Create user with or without password
+    await UserProfile.create({
+      username,
+      email,
+      password: hashedPassword, // Store hashed password only if it exists
+    });
 
     return res.status(201).json({
       message: "Account created successfully.",
@@ -135,29 +144,39 @@ const getProfile = async (req: Request, res: Response) => {
     }
 
     const user = await UserProfile.findById(userId)
-      .select("-password")
+      .select("-password") // Exclude password from the response
       .populate([
-        { path: "bookmarks", select: "title content" },
         {
-          path: "posts",
+          path: "bookmarks", // Assuming bookmarks reference Post documents
           select: "title content image createdAt likes comments",
           populate: [
-            { path: "likes", select: "username profilePicture" },
-            { path: "comments.userId", select: "username profilePicture" },
+            { path: "likes", select: "username profilePicture" }, // Populate likes details
+            { path: "comments.userId", select: "username profilePicture" }, // Populate comments user details
+          ],
+        },
+        {
+          path: "posts", // Assuming posts reference Post documents
+          select: "title content image createdAt likes comments",
+          populate: [
+            { path: "likes", select: "username profilePicture" }, // Populate likes details
+            { path: "comments.userId", select: "username profilePicture" }, // Populate comments user details
           ],
         },
       ])
       .exec();
 
+    // Check if user exists
     if (!user) {
       return res
         .status(404)
         .json({ message: "User not found.", success: false });
     }
 
-    return res
-      .status(200)
-      .json({ user: { ...user.toObject(), bio: user.bio }, success: true });
+    // Send back the user data
+    return res.status(200).json({
+      user: { ...user.toObject(), bio: user.bio }, // Convert mongoose document to plain object
+      success: true,
+    });
   } catch (error) {
     console.error("Error fetching user profile:", error);
     return res
@@ -240,23 +259,56 @@ const getSuggestedUsers = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "User not authenticated", success: false });
     }
 
+    // Fetch the suggested users excluding the current user
     const suggestedUsers = await UserProfile.find({
       _id: { $ne: userId },
-    }).select("-password"); // Exclude password field
+    }).select("-password"); 
 
-    return res.status(200).json({ success: true, users: suggestedUsers });
+    // Fetch the current user's profile to get their following list
+    const currentUser = await UserProfile.findById(userId).select("following");
+
+    if (!currentUser) {
+      return res.status(404).json({ message: "User not found", success: false });
+    }
+
+    // Create a Set for the current user's following IDs for quick lookup
+    const followingSet = new Set(currentUser.following.map(id => id.toString())); 
+
+    // Map suggested users to include the isFollowing property
+    const suggestedUsersWithFollowingStatus = suggestedUsers.map((user) => ({
+      ...user.toObject(), 
+      isFollowing: followingSet.has(user._id.toString()), 
+    }));
+
+    return res.status(200).json({ success: true, users: suggestedUsersWithFollowingStatus });
   } catch (error) {
     console.error("Error fetching suggested users:", error);
     return res.status(500).json({ message: "Internal server error.", success: false });
   }
 };
 
+
+
 //*** Follow or unfollow user
 const followOrUnfollow = async (req: Request, res: Response) => {
   try {
-    const currentUserId = req.userId as string;
+    const currentUserId = req.user?.id; // Access user ID from req.user
     const targetUserId = req.params.id;
 
+    // Log the user IDs for debugging
+    console.log("Current User ID:", currentUserId);
+    console.log("Target User ID:", targetUserId);
+
+    // Validate ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(currentUserId)) {
+      return res.status(400).json({ message: "Invalid current user ID format.", success: false });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(targetUserId)) {
+      return res.status(400).json({ message: "Invalid target user ID format.", success: false });
+    }
+
+    // Check if the user is trying to follow/unfollow themselves
     if (currentUserId === targetUserId) {
       return res.status(400).json({
         message: "You cannot follow or unfollow yourself.",
@@ -264,22 +316,22 @@ const followOrUnfollow = async (req: Request, res: Response) => {
       });
     }
 
+    // Fetch current and target user profiles
     const [currentUser, targetUser] = await Promise.all([
       UserProfile.findById(currentUserId),
       UserProfile.findById(targetUserId),
     ]);
 
+    // Check if users were found
     if (!currentUser || !targetUser) {
-      return res
-        .status(404)
-        .json({ message: "User not found.", success: false });
+      return res.status(404).json({ message: "User not found.", success: false });
     }
 
-    const isFollowing = currentUser.following.some((id) =>
-      id.equals(targetUser._id)
-    );
+    // Check if the current user is already following the target user
+    const isFollowing = currentUser.following.some((id) => id.equals(targetUser._id));
 
     if (isFollowing) {
+      // Unfollow logic
       await Promise.all([
         UserProfile.updateOne(
           { _id: currentUserId },
@@ -290,10 +342,9 @@ const followOrUnfollow = async (req: Request, res: Response) => {
           { $pull: { followers: currentUserId } }
         ),
       ]);
-      return res
-        .status(200)
-        .json({ message: "Successfully unfollowed.", success: true });
+      return res.status(200).json({ message: "Successfully unfollowed.", success: true });
     } else {
+      // Follow logic
       await Promise.all([
         UserProfile.updateOne(
           { _id: currentUserId },
@@ -304,17 +355,17 @@ const followOrUnfollow = async (req: Request, res: Response) => {
           { $push: { followers: currentUserId } }
         ),
       ]);
-      return res
-        .status(200)
-        .json({ message: "Successfully followed.", success: true });
+      return res.status(200).json({ message: "Successfully followed.", success: true });
     }
   } catch (error) {
     console.error("Error in follow or unfollow operation:", error);
-    return res
-      .status(500)
-      .json({ message: "Internal server error.", success: false });
+    return res.status(500).json({ message: "Internal server error.", success: false });
   }
 };
+
+
+export default followOrUnfollow;
+
 
 export const UserControllers = {
   register,

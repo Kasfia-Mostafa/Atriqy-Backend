@@ -1,4 +1,3 @@
-// yourSocketServerFile.ts
 import { Server } from "socket.io";
 import http from "http";
 import { Express } from "express";
@@ -32,7 +31,27 @@ export const createSocketServer = (app: Express) => {
       console.log(`User connected: ${userId}, Socket ID: ${socket.id}`);
     }
 
+    console.log(`Current userSocketMap after connection:`, userSocketMap);
+
+    // Emit the list of online users
     io.emit("getOnlineUsers", Object.keys(userSocketMap));
+
+    // Listen for notifications from clients
+    socket.on("sendNotification", (notification) => {
+      const { receiverId } = notification; // Assuming notification has a receiverId
+      const receiverSocketId = getReceiverSocketId(receiverId);
+      
+      console.log(`Trying to send notification to: ${receiverId}, Socket ID: ${receiverSocketId}`);
+      console.log("Notification structure:", notification);
+      
+      if (receiverSocketId) {
+        // Emit notification only to the receiver
+        io.to(receiverSocketId).emit("notification", notification);
+        console.log(`Notification sent to ${receiverId}:`, notification);
+      } else {
+        console.log(`User ${receiverId} is not connected.`);
+      }
+    });
 
     socket.on("disconnect", () => {
       if (userId) {
@@ -43,6 +62,5 @@ export const createSocketServer = (app: Express) => {
     });
   });
 
-  // Ensure to return getReceiverSocketId here
   return { server, io, getReceiverSocketId };
 };

@@ -8,3 +8,7 @@ export interface TPost extends Document {
   comments: Types.ObjectId[];
   updatedAt?: Date;
 }
+
+export interface UserSocketMap {
+  [userId: string]: string;
+}

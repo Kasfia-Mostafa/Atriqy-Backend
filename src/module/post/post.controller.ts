@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import sharp from "sharp";
 import cloudinary from "../../utils/cloudinary";
 import { UserProfile } from "../users/users.model";
-import { TPost } from "./post.interface";
+import { TPost, UserSocketMap } from "./post.interface";
 import mongoose from "mongoose";
 import { Post } from "./post.model";
 import { Comment } from "../comment/comment.model";
@@ -171,37 +171,24 @@ const likePost = async (req: Request, res: Response) => {
     const UserIdOfWhoLiked = req.user?.id;
     const postId = req.params.id;
 
-    // Ensure the user ID is present
     if (!UserIdOfWhoLiked) {
-      return res
-        .status(401)
-        .json({ message: "User not authenticated", success: false });
+      return res.status(401).json({ message: "User not authenticated", success: false });
     }
 
-    // Find the post
     const post = await Post.findById(postId);
     if (!post) {
-      return res
-        .status(404)
-        .json({ message: "Post not found", success: false });
+      return res.status(404).json({ message: "Post not found", success: false });
     }
 
-    // Like logic started
     await post.updateOne({ $addToSet: { likes: UserIdOfWhoLiked } });
 
-    // Implement socket io for real-time notification
-    const user = await UserProfile.findById(UserIdOfWhoLiked).select(
-      "username profilePicture"
-    );
-
+    const user = await UserProfile.findById(UserIdOfWhoLiked).select("username profilePicture");
     const postOwnerId = post.author.toString();
+
     if (postOwnerId !== UserIdOfWhoLiked) {
-      // Get the socket ID for the post owner
       const postOwnerSocketId = getReceiverSocketId(postOwnerId);
 
-      // Check if postOwnerSocketId is defined before emitting a notification
       if (postOwnerSocketId) {
-        // Emit a notification event
         const notification = {
           type: "like",
           userId: UserIdOfWhoLiked,
@@ -209,26 +196,25 @@ const likePost = async (req: Request, res: Response) => {
           postId,
           message: "Your post was liked",
         };
-
         io.to(postOwnerSocketId).emit("notification", notification);
+        console.log(`Notification sent to ${postOwnerId}:`, notification);
+      } else {
+        console.log(`Post Owner Socket ID is undefined. User might be disconnected.`);
       }
     }
 
     return res.status(200).json({ message: "Post liked", success: true });
   } catch (error) {
     console.error("Error liking post:", error);
-    return res
-      .status(500)
-      .json({ message: "Internal server error", success: false });
+    return res.status(500).json({ message: "Internal server error", success: false });
   }
 };
 
 //*** Dislike post
 const dislikePost = async (req: Request, res: Response): Promise<Response> => {
   try {
-    const userId = req.user?.id; // Use optional chaining to safely access req.user
+    const userId = req.user?.id;
     const postId: string = req.params.id;
-
     // Check if userId is defined
     if (!userId) {
       return res
@@ -253,10 +239,8 @@ const dislikePost = async (req: Request, res: Response): Promise<Response> => {
         .status(400)
         .json({ message: "Post not liked by user", success: false });
     }
-
     // Remove the user ID from the likes array
     await post.updateOne({ $pull: { likes: userId } });
-
     // Fetch user details for the notification
     const user = await UserProfile.findById(userId).select(
       "username profilePicture"
@@ -266,7 +250,6 @@ const dislikePost = async (req: Request, res: Response): Promise<Response> => {
         .status(404)
         .json({ message: "User not found", success: false });
     }
-
     // Handle notifications
     const postOwnerId = post.author.toString();
     if (postOwnerId !== userId) {
@@ -282,7 +265,6 @@ const dislikePost = async (req: Request, res: Response): Promise<Response> => {
         io.to(postOwnerSocketId).emit("notification", notification);
       }
     }
-
     return res.status(200).json({ message: "Post disliked", success: true });
   } catch (error) {
     console.error("Error in dislikePost:", error);
@@ -446,41 +428,39 @@ const bookmarkPost = async (req: Request, res: Response): Promise<Response> => {
     // Find the post by ID
     const post = await Post.findById(postId);
     if (!post) {
-      return res
-        .status(404)
-        .json({ message: "Post not found", success: false });
+      return res.status(404).json({ message: "Post not found", success: false });
     }
 
     // Find the user by ID
     const user = await UserProfile.findById(userId);
     if (!user) {
-      return res
-        .status(404)
-        .json({ message: "User not found", success: false });
+      return res.status(404).json({ message: "User not found", success: false });
     }
 
     // Check if the post is already bookmarked
-    const isBookmarked = user.bookmarks.includes(
-      post._id as mongoose.Types.ObjectId
-    );
+    const isBookmarked = user.bookmarks.includes(post._id as mongoose.Types.ObjectId);
     const updateOperation = isBookmarked
       ? { $pull: { bookmarks: post._id } }
       : { $addToSet: { bookmarks: post._id } };
 
+    // Update the user's bookmarks
     await user.updateOne(updateOperation);
+
+    // Fetch the updated post data, including image, comments, and likes
+    const updatedPost = await Post.findById(postId).populate('comments likes');
 
     return res.status(200).json({
       type: isBookmarked ? "unsaved" : "saved",
       message: isBookmarked ? "Post removed from bookmarks" : "Post bookmarked",
       success: true,
+      post: updatedPost, // Include the updated post data in the response
     });
   } catch (error) {
     console.error("Error in bookmarkPost:", error);
-    return res
-      .status(500)
-      .json({ message: "An internal server error occurred", success: false });
+    return res.status(500).json({ message: "An internal server error occurred", success: false });
   }
 };
+
 
 export const PostController = {
   addNewPost,
